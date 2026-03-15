@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual envs
+.venv/
+env/
+venv/
+
+# Checkpoints and outputs
+checkpoints/
+precomputed/
+outputs/
+*.pt
+*.safetensors
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# W&B
+wandb/
+
+# macOS
+.DS_Store
