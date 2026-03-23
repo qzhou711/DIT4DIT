@@ -371,8 +371,12 @@ class Stage1Trainer:
         # Get T5 embedding
         if self.precomputed_t5_embedding is not None:
             t5_emb = self.precomputed_t5_embedding.to(self.device, dtype=self.compute_dtype)
+            if t5_emb.shape[0] == 1:
+                t5_emb = t5_emb.expand(z_cond.shape[0], -1, -1)
         else:
             t5_emb = batch["t5_embedding"][:1].to(self.device, dtype=self.compute_dtype)
+            if t5_emb.ndim == 4 and t5_emb.shape[1] == 1:
+                t5_emb = t5_emb.squeeze(1)
 
         # Start from pure noise and denoise via Euler ODE
         z_noise = torch.randn_like(z_pred_gt)
