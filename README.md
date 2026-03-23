@@ -2,6 +2,19 @@
 
 A **mimic-video**–style video–action model: LoRA-finetune a Cosmos video backbone, then train a lightweight DiT with flow matching for action prediction on **LIBERO** manipulation tasks (LeRobot-format data).
 
+## Preliminary Results (Stage 1)
+
+Early validation of the Stage 1 LoRA finetuning (Left: Ground Truth | Right: DiT Auto-encoder reconstruction from noise):
+
+<p align="center">
+  <video src="assets/stage1_step_2100.mp4" width="32%" controls autoplay loop></video>
+  <video src="assets/stage1_step_3100.mp4" width="32%" controls autoplay loop></video>
+  <video src="assets/stage1_step_4100.mp4" width="32%" controls autoplay loop></video>
+</p>
+<p align="center">
+  <i>(From left to right: Steps 2100, 3100, 4100)</i>
+</p>
+
 ## Overview
 
 - **Data**: Built-in support for all 4 LIBERO suites via `--suite` (`libero_spatial`, `libero_object`, `libero_goal`, `libero_10`). Uses 100% of available demonstrations for training to maximize simulated evaluation metrics.
