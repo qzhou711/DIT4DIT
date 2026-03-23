@@ -98,8 +98,8 @@ def main():
     # Load precomputed T5 embedding(s)
     # Multi-task: t5_embeddings.pt (dict) → dataset handles per-sample, trainer gets None
     # Single-task: t5_embedding.pt (tensor) → trainer broadcasts to all samples
-    multi_t5_path = os.path.join(args.precomputed_dir, "t5_embeddings.pt")
-    single_t5_path = os.path.join(args.precomputed_dir, "t5_embedding.pt")
+    multi_t5_path = os.path.join(data_config.precomputed_dir, "t5_embeddings.pt")
+    single_t5_path = os.path.join(data_config.precomputed_dir, "t5_embedding.pt")
 
     t5_embedding = None  # What we pass to the trainer
     if os.path.exists(multi_t5_path):
