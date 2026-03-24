@@ -176,7 +176,7 @@ class Stage1Config:
     log_every: int = 10
     log_video_every: int = 500
     save_every: int = 1000
-    output_dir: str = "checkpoints/stage1"
+    output_dir: str = "stage1"
     wandb_project: str = "mimic-video"
     wandb_run_name: str = "stage1-lora"
 
@@ -204,9 +204,9 @@ class Stage2Config:
     log_every: int = 10
     log_video_every: int = 10  # Temp low interval for OOM stress testing
     save_every: int = 1000
-    output_dir: str = "checkpoints/stage2"
+    output_dir: str = "stage2"
     wandb_project: str = "mimic-video"
     wandb_run_name: str = "stage2-action-decoder"
 
     # Stage 1 checkpoint to load
-    stage1_checkpoint: str = "checkpoints/stage1/final"
+    stage1_checkpoint: str = ""
