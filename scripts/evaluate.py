@@ -103,6 +103,7 @@ def main():
     parser.add_argument("--tau_v", type=float, default=1.0, help="Video noise level at inference (1.0 = no denoising)")
     parser.add_argument("--num_action_steps", type=int, default=10, help="Number of Euler steps for action denoising")
     parser.add_argument("--max_samples", type=int, default=200, help="Max samples to evaluate")
+    parser.add_argument("--cosmos_model_id", type=str, default=None, help="Local path or HF ID for Cosmos model")
     args = parser.parse_args()
 
     # Auto-set paths based on suite
@@ -124,6 +125,8 @@ def main():
             args.precomputed_dir = "precomputed/"
 
     model_config = ModelConfig()
+    if getattr(args, "cosmos_model_id", None):
+        model_config.cosmos_model_id = args.cosmos_model_id
 
     # Load precomputed T5 embedding(s)
     multi_t5_path = os.path.join(args.precomputed_dir, "t5_embeddings.pt")

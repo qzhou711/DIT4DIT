@@ -81,8 +81,11 @@ Install [LIBERO](https://github.com/Lifelong-Robot-Learning/LIBERO) in a **separ
 ```bash
 conda activate mimic
 python scripts/eval_server.py \
-  --stage1_checkpoint checkpoints/stage1/final \
-  --stage2_checkpoint checkpoints/stage2/final
+        --suite libero_object \
+        --stage1_checkpoint checkpoints/libero_object/stage1/step_4000 \
+        --stage2_checkpoint checkpoints/libero_object/stage2/step_1000 \
+        --cosmos_model_id checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/f50c09f5d8ab133a90cac3f4886a6471e9ba3f18
+
 ```
 
 **Terminal 2 — LIBERO client (e.g., your LIBERO simulator env):**

@@ -6,9 +6,12 @@ simulation client running in a different conda environment.
 
 Usage:
     conda activate mimic
+    # With specific model path and suite
     python scripts/eval_server.py \
-        --stage1_checkpoint checkpoints/stage1/final \
-        --stage2_checkpoint checkpoints/stage2/final
+        --suite libero_object \
+        --stage1_checkpoint checkpoints/libero_object/stage1/step_4000 \
+        --stage2_checkpoint checkpoints/libero_object/stage2/step_1000 \
+        --cosmos_model_id checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/f50c09f5d8ab133a90cac3f4886a6471e9ba3f18
 
 The server expects JSON messages with:
     {
@@ -120,6 +123,8 @@ def load_model(args) -> MimicVideoPolicy:
     else:
         data_config = DataConfig()
     model_config = ModelConfig()
+    if getattr(args, "cosmos_model_id", None):
+        model_config.cosmos_model_id = args.cosmos_model_id
 
     device = args.device
     log.info("Loading Cosmos video backbone with Stage 1 LoRA...")
@@ -178,6 +183,7 @@ def load_model(args) -> MimicVideoPolicy:
     # Load T5 embedding(s)
     t5_embedding = None
     t5_embeddings_dict = None
+    task_descriptions = {}
 
     multi_t5_path = os.path.join(precomputed_dir, "t5_embeddings.pt")
     single_t5_path = os.path.join(precomputed_dir, "t5_embedding.pt")
@@ -325,6 +331,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--tau_v", type=float, default=1.0)
     parser.add_argument("--num_action_steps", type=int, default=10)
+    parser.add_argument("--cosmos_model_id", type=str, default=None, help="Local path or HF ID for Cosmos model")
     args = parser.parse_args()
 
     # Auto-set checkpoint/precomputed paths based on suite
