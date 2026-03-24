@@ -2,6 +2,8 @@
 
 Supports both single-task (one prompt) and multi-task (from dataset metadata).
 
+The default Cosmos model on Hugging Face is gated; set HF_TOKEN (and accept the license on the model page) or pass ``--cosmos_model_id`` to a local snapshot.
+
 Usage:
     # Multi-task: auto-detect tasks from dataset metadata
     python scripts/precompute_embeddings.py --output_dir precomputed/
@@ -264,6 +266,12 @@ def main():
     parser.add_argument("--output_dir", type=str, default=None)
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument(
+        "--cosmos_model_id",
+        type=str,
+        default=None,
+        help="Override ModelConfig.cosmos_model_id: HF repo id (gated—needs HF_TOKEN) or local snapshot directory",
+    )
+    parser.add_argument(
         "--prompt", type=str, default=None,
         help="Single task prompt (if not set, auto-detects tasks from dataset metadata)"
     )
@@ -278,11 +286,12 @@ def main():
         data_config.precomputed_dir = args.output_dir
 
     model_config = ModelConfig()
+    model_id = args.cosmos_model_id or model_config.cosmos_model_id
 
     if args.prompt:
         # Single-task mode: explicit prompt
         precompute_single_t5_embedding(
-            model_id=model_config.cosmos_model_id,
+            model_id=model_id,
             prompt=args.prompt,
             output_dir=data_config.precomputed_dir,
             device=args.device,
@@ -290,7 +299,7 @@ def main():
     else:
         # Multi-task mode: auto-detect from dataset
         precompute_multi_task_t5_embeddings(
-            model_id=model_config.cosmos_model_id,
+            model_id=model_id,
             repo_id=data_config.repo_id,
             output_dir=data_config.precomputed_dir,
             device=args.device,
@@ -299,7 +308,7 @@ def main():
     # Optionally precompute VAE latents
     if args.latents:
         precompute_vae_latents(
-            model_id=model_config.cosmos_model_id,
+            model_id=model_id,
             data_config=data_config,
             output_dir=data_config.precomputed_dir,
             device=args.device,

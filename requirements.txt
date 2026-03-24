@@ -1,3 +1,8 @@
+# scipy / scikit-learn: pin in this env so ``pip install`` does not rely on ~/.local
+# (avoids NumPy 2 vs old SciPy ABI errors with ``datasets``, and sklearn dtype errors with transformers).
+# Default Cosmos checkpoint (ModelConfig.cosmos_model_id) is gated on Hugging Face; set HF_TOKEN and accept the model license before downloading.
+scipy>=1.14
+scikit-learn>=1.5
 torch>=2.1
 diffusers>=0.35
 peft>=0.10
