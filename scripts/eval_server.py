@@ -136,22 +136,31 @@ def load_model(args) -> MimicVideoPolicy:
     backbone.transformer.to(device)
     backbone.offload_vae_and_text_encoder("cpu")
 
-    log.info("Loading action decoder...")
+    log.info("Loading action decoder checkpoint...")
+    decoder_path = os.path.join(args.stage2_checkpoint, "action_decoder.pt")
+    state_dict = torch.load(decoder_path, map_location=device, weights_only=True)
+    state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
+
+    # Autodetect architecture sizes directly from checkpoint weights!
+    # This prevents crashes if config.py changes between training and evaluation.
+    inferred_hidden_dim = state_dict["blocks.0.self_attn_q.weight"].shape[0]
+    inferred_layers = 1 + max([int(k.split(".")[1]) for k in state_dict.keys() if k.startswith("blocks.")])
+    inferred_heads = inferred_hidden_dim // 64  # Standard attention head dim is 64
+
+    log.info(f"  → Inferred from checkpoint: dim={inferred_hidden_dim}, layers={inferred_layers}, heads={inferred_heads}")
+
     action_decoder = ActionDecoderDiT(
         action_dim=data_config.action_dim,
         proprio_dim=data_config.proprio_dim,
-        hidden_dim=model_config.decoder_hidden_dim,
-        num_layers=model_config.decoder_num_layers,
-        num_heads=model_config.decoder_num_heads,
+        hidden_dim=inferred_hidden_dim,
+        num_layers=inferred_layers,
+        num_heads=inferred_heads,
         mlp_ratio=model_config.decoder_mlp_ratio,
         backbone_hidden_dim=backbone.hidden_dim,
         action_chunk_size=data_config.action_chunk_size,
         proprio_mask_prob=0.0,  # No masking at inference
     )
 
-    decoder_path = os.path.join(args.stage2_checkpoint, "action_decoder.pt")
-    state_dict = torch.load(decoder_path, map_location=device, weights_only=True)
-    state_dict = {k.replace("module.", "", 1): v for k, v in state_dict.items()}
     action_decoder.load_state_dict(state_dict)
     action_decoder.to(device)
     action_decoder.eval()
