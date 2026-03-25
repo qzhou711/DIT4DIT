@@ -215,17 +215,17 @@ class Stage2Trainer:
 
         return {"loss": loss.item() * self.gradient_accumulation_steps}
 
-    def train(self):
+    def train(self, start_step: int = 0):
         """Run the full training loop."""
         self.backbone.eval()
         self.action_decoder.train()
 
         data_iter = iter(self.train_dataloader)
         running_loss = 0.0
-        global_step = 0
+        global_step = start_step
 
         if self.rank == 0:
-            pbar = tqdm(total=self.total_steps, desc="Stage 2 Training")
+            pbar = tqdm(total=self.total_steps, initial=start_step, desc="Stage 2 Training")
         else:
             pbar = None
 

@@ -292,17 +292,18 @@ def main():
     )
 
     # Resume if requested
+    start_step = 0
     if args.resume:
         if is_main:
             print(f"Resuming from {args.resume}")
-        step = trainer._load_checkpoint(args.resume)
+        start_step = trainer._load_checkpoint(args.resume)
         if is_main:
-            print(f"Resumed at step {step}")
+            print(f"Resumed at step {start_step}")
 
     # Train
     if is_main:
         print("Starting Stage 2 training...")
-    trainer.train()
+    trainer.train(start_step=start_step)
     
     cleanup_distributed()
 
