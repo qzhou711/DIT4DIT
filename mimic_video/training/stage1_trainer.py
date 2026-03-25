@@ -177,7 +177,7 @@ class Stage1Trainer:
         # Forward through transformer (LoRA active)
         t0 = time.time()
         with torch.amp.autocast("cuda", dtype=self.compute_dtype):
-            raw_output, _ = self.backbone.forward_transformer(
+            _, full_output = self.backbone.forward_transformer(
                 z_noisy=z_noisy,
                 z_cond=z_cond,
                 tau_v=tau_v,
@@ -185,13 +185,14 @@ class Stage1Trainer:
             )
         timings["transformer_fwd"] = time.time() - t0
 
-        # The raw output of the Cosmos network IS the velocity v = eps - x_0
-        # We only compute loss on the prediction frames (not conditioning frames)
+        # Cosmos-consistent loss (Option A):
+        # full_output is D = (1-t)*x_noisy - t*F_theta, which approximates x_0.
+        # Training D to predict z_pred (clean latent) aligns with Cosmos design
+        # where the raw network F_theta is trained to predict eps - 2*x_0.
         T_cond = self.num_cond_latent_frames
-        velocity_pred = raw_output[:, :, T_cond:]  # [B, C, T_pred, H, W]
-        velocity_target = self.fm.velocity_target(z_pred, eps_v)  # [B, C, T_pred, H, W]
+        x0_pred = full_output[:, :, T_cond:]  # D ≈ x_0, [B, C, T_pred, H, W]
 
-        loss = self.fm.compute_loss(velocity_pred.float(), velocity_target.float())
+        loss = self.fm.compute_loss(x0_pred.float(), z_pred.float())
 
         # Scale loss for gradient accumulation
         loss = loss / self.gradient_accumulation_steps
@@ -384,14 +385,17 @@ class Stage1Trainer:
         def model_fn(z_t, tau):
             tau_tensor = torch.tensor([tau], device=z_t.device, dtype=z_t.dtype)
             with torch.amp.autocast("cuda", dtype=self.compute_dtype):
-                raw_out, _ = self.backbone.forward_transformer(
+                _, full_out = self.backbone.forward_transformer(
                     z_noisy=z_t,
                     z_cond=z_cond,
                     tau_v=tau_tensor,
                     encoder_hidden_states=t5_emb,
                 )
             T_cond = self.num_cond_latent_frames
-            return raw_out[:, :, T_cond:]  # velocity for prediction frames only
+            # Derive velocity from x_0 prediction: v = (x_noisy - x_0) / tau
+            # This is consistent with the Option A training objective.
+            x0_pred = full_out[:, :, T_cond:]
+            return (z_t - x0_pred) / max(tau, 1e-6)
 
         z_pred_denoised = self.fm.ode_solve_euler(
             model_fn, z_noise, num_steps=self.ode_steps, tau_start=1.0, tau_end=0.0

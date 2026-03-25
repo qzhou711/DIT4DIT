@@ -1,57 +1,57 @@
 {
-  "libero_10": {
-    "put both the alphabet soup and the tomato sauce in the basket": {
+  "libero_object": {
+    "pick up the alphabet soup and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put both the cream cheese box and the butter in the basket": {
+    "pick up the cream cheese and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "turn on the stove and put the moka pot on it": {
+    "pick up the salad dressing and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put the black bowl in the bottom drawer of the cabinet and close it": {
+    "pick up the bbq sauce and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put the white mug on the left plate and put the yellow and white mug on the right plate": {
+    "pick up the ketchup and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "pick up the book and place it in the back compartment of the caddy": {
+    "pick up the tomato sauce and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put the white mug on the plate and put the chocolate pudding to the right of the plate": {
+    "pick up the butter and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put both the alphabet soup and the cream cheese box in the basket": {
+    "pick up the milk and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put both moka pots on the stove": {
+    "pick up the chocolate pudding and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
-    "put the yellow and white mug in the microwave and close it": {
+    "pick up the orange juice and place it in the basket": {
       "success": 0,
       "total": 1,
       "success_rate": 0.0
     },
     "__summary__": {
-      "suite": "libero_10",
+      "suite": "libero_object",
       "total_success": 0,
       "total_episodes": 10,
       "average_success_rate": 0.0

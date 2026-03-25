@@ -209,16 +209,16 @@ class MimicVideoPolicy(nn.Module):
 
             for _ in range(num_steps):
                 tau_tensor = torch.full((B,), tau, device=device)
-                raw_output, _ = self.backbone.forward_transformer(
+                _, full_output = self.backbone.forward_transformer(
                     z_noisy=z_future,
                     z_cond=z_cond,
                     tau_v=tau_tensor,
                     encoder_hidden_states=t5_emb,
                 )
-                # raw_output is velocity v = eps - x_0
-                # In flow matching ODE: dx/dt = v, but we use the Cosmos parameterized output
+                # Derive velocity from x_0 prediction: v = (x_noisy - x_0) / tau
                 T_cond = self.num_cond_latent_frames
-                v_pred = raw_output[:, :, T_cond:]
+                x0_pred = full_output[:, :, T_cond:]
+                v_pred = (z_future - x0_pred) / max(tau, 1e-6)
                 z_future = z_future + v_pred * dt
                 tau = tau + dt
 
