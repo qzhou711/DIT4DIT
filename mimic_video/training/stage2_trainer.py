@@ -223,6 +223,7 @@ class Stage2Trainer:
         data_iter = iter(self.train_dataloader)
         running_loss = 0.0
         global_step = start_step
+        epoch = 0
 
         if self.rank == 0:
             pbar = tqdm(total=self.total_steps, initial=start_step, desc="Stage 2 Training")
@@ -237,6 +238,9 @@ class Stage2Trainer:
                 try:
                     batch = next(data_iter)
                 except StopIteration:
+                    epoch += 1
+                    if self.world_size > 1 and hasattr(self.train_dataloader, 'sampler'):
+                        self.train_dataloader.sampler.set_epoch(epoch)
                     data_iter = iter(self.train_dataloader)
                     batch = next(data_iter)
 
@@ -253,6 +257,14 @@ class Stage2Trainer:
             self.lr_scheduler.step()
 
             global_step += 1
+
+            # Synchronize loss across GPUs for accurate logging
+            if self.world_size > 1:
+                import torch.distributed as dist
+                loss_tensor = torch.tensor([running_loss], device=self.device)
+                dist.all_reduce(loss_tensor, op=dist.ReduceOp.AVG)
+                running_loss = loss_tensor.item()
+
             avg_loss = running_loss / self.gradient_accumulation_steps
             running_loss = 0.0
 
