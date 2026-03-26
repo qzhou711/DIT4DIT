@@ -14,3 +14,4 @@ wandb
 tqdm
 sentencepiece
 protobuf
+wandb[media]
