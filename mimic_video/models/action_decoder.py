@@ -290,8 +290,10 @@ class ActionDecoderDiT(nn.Module):
             nn.Linear(hidden_dim, hidden_dim),
         )
 
-        # Learned mask token for proprioception masking
-        self.proprio_mask_token = nn.Parameter(torch.randn(1, 1, hidden_dim) * 0.02)
+        # Mask token for proprioception masking (buffer, not a trainable parameter).
+        # Registered as a buffer so DDP does not track it for gradient sync —
+        # avoids "Expected to have finished reduction" errors when mask_prob=0.
+        self.register_buffer('proprio_mask_token', torch.randn(1, 1, hidden_dim) * 0.02)
 
         # Positional embeddings: 1 (proprio) + action_chunk_size (actions)
         seq_len = 1 + action_chunk_size
