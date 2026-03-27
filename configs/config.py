@@ -219,7 +219,7 @@ class Stage1Config:
     warmup_steps: int = 1000
     weight_decay: float = 0.1
     grad_clip: float = 10.0
-    total_steps: int = 300000  # 1个epoch 400 steps, 25个epoch
+    total_steps: int = 100000  # 1个epoch 400 steps, 25个epoch
     batch_size: int = 200  # effective batch size via accumulation
     micro_batch_size: int = 20
     gradient_accumulation_steps: int = 2  # auto-computed in train script: batch_size / (micro_batch * num_gpus)
@@ -246,7 +246,7 @@ class Stage2Config:
     warmup_steps: int = 1000
     weight_decay: float = 0.1
     grad_clip: float = 10.0
-    total_steps: int = 10000  # 1个epoch 400 steps, 25个epoch
+    total_steps: int = 300000  # 1个epoch 400 steps, 25个epoch
     batch_size: int = 200  # effective batch size via accumulation
     micro_batch_size: int = 20
     gradient_accumulation_steps: int = 2  # auto-computed in train script: batch_size / (micro_batch * num_gpus)
