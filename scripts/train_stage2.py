@@ -85,6 +85,8 @@ def main():
                         help="Override training dtype (bf16 or fp16)")
     parser.add_argument("--no_gradient_checkpointing", action="store_true",
                         help="Disable gradient checkpointing (faster, uses more VRAM)")
+    parser.add_argument("--lr", type=float, default=None,
+                        help="Override learning rate (e.g. scale with batch size: lr=1e-4*(batch/200))")
     args = parser.parse_args()
 
     # Setup distributed
@@ -130,6 +132,8 @@ def main():
         train_config.dtype = args.dtype
     if args.no_gradient_checkpointing:
         train_config.gradient_checkpointing = False
+    if args.lr is not None:
+        train_config.lr = args.lr
 
     # Auto-compute gradient accumulation for multi-GPU
     effective_batch = train_config.batch_size
