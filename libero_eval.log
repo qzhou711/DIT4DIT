@@ -483,3 +483,72 @@ Results saved to libero_eval_results.json
 2026-03-26 20:10:03,768 [INFO]   libero_object       : 0/10 = 0.0%
 2026-03-26 20:10:03,769 [INFO] 
 Results saved to libero_eval_results.json
+2026-03-27 13:22:13,461 [INFO] 
+############################################################
+2026-03-27 13:22:13,461 [INFO] # Evaluating suite: libero_object
+2026-03-27 13:22:13,461 [INFO] ############################################################
+2026-03-27 13:22:13,461 [INFO] 
+============================================================
+2026-03-27 13:22:13,461 [INFO] Suite: libero_object | Tasks: 10 | Episodes/task: 3
+2026-03-27 13:22:13,462 [INFO] ============================================================
+2026-03-27 13:22:16,077 [INFO] 
+--- Task 1/10: pick up the alphabet soup and place it in the basket ---
+2026-03-27 13:25:46,653 [INFO] Video saved: eval_videos/libero_object/task1_ep1.mp4 (608 frames)
+2026-03-27 13:25:46,653 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 13:28:47,721 [INFO] Video saved: eval_videos/libero_object/task1_ep2.mp4 (608 frames)
+2026-03-27 13:28:47,721 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-27 13:34:18,047 [INFO] Video saved: eval_videos/libero_object/task1_ep3.mp4 (608 frames)
+2026-03-27 13:34:18,048 [INFO]   Episode 3/3: ❌ Fail (steps=608)
+2026-03-27 13:34:18,048 [INFO]   Task 1 SR: 0/3 = 0.0%
+2026-03-27 13:34:18,827 [INFO] 
+--- Task 2/10: pick up the cream cheese and place it in the basket ---
+2026-03-27 13:37:21,892 [INFO] Video saved: eval_videos/libero_object/task2_ep1.mp4 (608 frames)
+2026-03-27 13:37:21,892 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 13:40:29,766 [INFO] Video saved: eval_videos/libero_object/task2_ep2.mp4 (608 frames)
+2026-03-27 13:40:29,766 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-27 13:45:15,142 [INFO] Video saved: eval_videos/libero_object/task2_ep3.mp4 (608 frames)
+2026-03-27 13:45:15,142 [INFO]   Episode 3/3: ❌ Fail (steps=608)
+2026-03-27 13:45:15,142 [INFO]   Task 2 SR: 0/3 = 0.0%
+2026-03-27 13:45:16,417 [INFO] 
+--- Task 3/10: pick up the salad dressing and place it in the basket ---
+2026-03-27 13:49:05,236 [INFO] Video saved: eval_videos/libero_object/task3_ep1.mp4 (608 frames)
+2026-03-27 13:49:05,236 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 13:52:13,992 [INFO] Video saved: eval_videos/libero_object/task3_ep2.mp4 (608 frames)
+2026-03-27 13:52:13,992 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-27 13:55:24,168 [INFO] Video saved: eval_videos/libero_object/task3_ep3.mp4 (608 frames)
+2026-03-27 13:55:24,168 [INFO]   Episode 3/3: ❌ Fail (steps=608)
+2026-03-27 13:55:24,168 [INFO]   Task 3 SR: 0/3 = 0.0%
+2026-03-27 13:55:24,923 [INFO] 
+--- Task 4/10: pick up the bbq sauce and place it in the basket ---
+2026-03-27 13:58:37,050 [INFO] Video saved: eval_videos/libero_object/task4_ep1.mp4 (608 frames)
+2026-03-27 13:58:37,050 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 14:01:50,158 [INFO] Video saved: eval_videos/libero_object/task4_ep2.mp4 (608 frames)
+2026-03-27 14:01:50,158 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-27 14:05:01,950 [INFO] Video saved: eval_videos/libero_object/task4_ep3.mp4 (608 frames)
+2026-03-27 14:05:01,950 [INFO]   Episode 3/3: ❌ Fail (steps=608)
+2026-03-27 14:05:01,950 [INFO]   Task 4 SR: 0/3 = 0.0%
+2026-03-27 14:05:02,620 [INFO] 
+--- Task 5/10: pick up the ketchup and place it in the basket ---
+2026-03-27 14:08:13,353 [INFO] Video saved: eval_videos/libero_object/task5_ep1.mp4 (608 frames)
+2026-03-27 14:08:13,353 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 14:11:29,195 [INFO] Video saved: eval_videos/libero_object/task5_ep2.mp4 (608 frames)
+2026-03-27 14:11:29,195 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-27 14:14:50,514 [INFO] Video saved: eval_videos/libero_object/task5_ep3.mp4 (608 frames)
+2026-03-27 14:14:50,514 [INFO]   Episode 3/3: ❌ Fail (steps=608)
+2026-03-27 14:14:50,514 [INFO]   Task 5 SR: 0/3 = 0.0%
+2026-03-27 14:14:51,209 [INFO] 
+--- Task 6/10: pick up the tomato sauce and place it in the basket ---
+2026-03-27 14:18:09,117 [INFO] Video saved: eval_videos/libero_object/task6_ep1.mp4 (608 frames)
+2026-03-27 14:18:09,117 [INFO]   Episode 1/3: ❌ Fail (steps=608)
+2026-03-27 14:21:26,731 [INFO] Video saved: eval_videos/libero_object/task6_ep2.mp4 (608 frames)
+2026-03-27 14:21:26,731 [INFO]   Episode 2/3: ❌ Fail (steps=608)
+2026-03-28 13:28:07,233 [INFO] 
+############################################################
+2026-03-28 13:28:07,233 [INFO] # Evaluating suite: libero_object
+2026-03-28 13:28:07,233 [INFO] ############################################################
+2026-03-28 13:28:07,233 [INFO] 
+============================================================
+2026-03-28 13:28:07,233 [INFO] Suite: libero_object | Tasks: 10 | Episodes/task: 3
+2026-03-28 13:28:07,233 [INFO] ============================================================
+2026-03-28 13:28:08,882 [INFO] 
+--- Task 1/10: pick up the alphabet soup and place it in the basket ---
