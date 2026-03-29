@@ -229,6 +229,8 @@ def main():
         camera_names=data_config.camera_names,
         target_height=data_config.camera_height,
         target_width=data_config.camera_width,
+        action_norm_type=data_config.action_norm_type,
+        hidden_state_pool=model_config.hidden_state_pool,
         device=args.device,
     )
 

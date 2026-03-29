@@ -209,6 +209,8 @@ def main():
         action_stats = torch.load(stats_path, map_location="cpu", weights_only=True)
         train_dataset.action_mean = action_stats["mean"]
         train_dataset.action_std = action_stats["std"]
+        train_dataset.action_min = action_stats["min"]
+        train_dataset.action_max = action_stats["max"]
 
     if is_main:
         print(f"Train dataset: {len(train_dataset)} samples")

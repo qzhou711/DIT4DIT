@@ -48,7 +48,7 @@ parser.add_argument("--suites", nargs="+",
                     default=["libero_spatial", "libero_object", "libero_goal", "libero_10"])
 parser.add_argument("--max_steps", type=int, default=600)
 parser.add_argument("--num_episodes", type=int, default=20)
-parser.add_argument("--action_horizon", type=int, default=16,
+parser.add_argument("--action_horizon", type=int, default=8, #16
                     help="Number of actions to execute from each predicted chunk")
 parser.add_argument("--resolution", type=int, default=256)
 parser.add_argument("--seed", type=int, default=42)

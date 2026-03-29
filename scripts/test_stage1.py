@@ -1,10 +1,15 @@
 """Simple test script for Stage 1: predict future images from a checkpoint.
 
 Usage:
-    python scripts/test_stage1.py --suite libero_object --checkpoint checkpoints/libero_object/stage1/step_1000 --cosmos_model_id /path/to/cosmos
+    python scripts/test_stage1.py \
+    --suite libero_object \
+    --checkpoint ./checkpoints/libero_object/stage1/step_1000 \
+    --cosmos_model_id ./checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/f50c09f5d8ab133a90cac3f4886a6471e9ba3f18 \
+    --device cuda --ode_steps 10
 """
 
 import os
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 import sys
 import argparse
 import torch
@@ -77,8 +82,9 @@ def main():
     
     print(f"Loading LoRA from {args.checkpoint}...")
     backbone.load_lora(args.checkpoint, is_trainable=False)
+    backbone.transformer.to(device)
     backbone.transformer.eval()
-    backbone.move_vae_to(device)
+    backbone.offload_vae_and_text_encoder("cpu")
     
     # 4. Inference setup
     fm = FlowMatchingScheduler()
@@ -115,14 +121,14 @@ def main():
         z_noise = torch.randn_like(z_pred_gt)
 
         def model_fn(z_t, tau):
-            tau_tensor = torch.tensor([tau], device=z_t.device, dtype=z_t.dtype)
-            # forward_transformer handles LoRA activation
-            _, full_out = backbone.forward_transformer(
-                z_noisy=z_t,
-                z_cond=z_cond,
-                tau_v=tau_tensor,
-                encoder_hidden_states=t5_emb,
-            )
+            tau_tensor = torch.tensor([tau], device=z_t.device, dtype=torch.float32)
+            with torch.amp.autocast("cuda", dtype=compute_dtype):
+                _, full_out = backbone.forward_transformer(
+                    z_noisy=z_t,
+                    z_cond=z_cond,
+                    tau_v=tau_tensor,
+                    encoder_hidden_states=t5_emb,
+                )
             T_cond = num_cond_latent_frames
             x0_pred = full_out[:, :, T_cond:]
             return (z_t - x0_pred) / max(tau, 1e-6)
