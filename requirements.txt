@@ -6,6 +6,9 @@ scikit-learn>=1.5
 torch>=2.1
 diffusers>=0.35
 peft>=0.10
+# LeRobot parquet embeds HF features with _type "List"; datasets 3.x raises ValueError on load.
+# lerobot 0.5.x requires: datasets>=4.0,<5
+datasets>=4.0.0,<5.0.0
 lerobot
 transformers
 accelerate
