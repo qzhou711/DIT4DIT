@@ -2,59 +2,59 @@
   "libero_object": {
     "pick up the alphabet soup and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the cream cheese and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the salad dressing and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the bbq sauce and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the ketchup and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the tomato sauce and place it in the basket": {
-      "success": 0,
-      "total": 1,
-      "success_rate": 0.0
+      "success": 1,
+      "total": 2,
+      "success_rate": 0.5
     },
     "pick up the butter and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the milk and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the chocolate pudding and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "pick up the orange juice and place it in the basket": {
       "success": 0,
-      "total": 1,
+      "total": 2,
       "success_rate": 0.0
     },
     "__summary__": {
       "suite": "libero_object",
-      "total_success": 0,
-      "total_episodes": 10,
-      "average_success_rate": 0.0
+      "total_success": 1,
+      "total_episodes": 20,
+      "average_success_rate": 0.05
     }
   }
 }

@@ -12,6 +12,20 @@ Early validation of the Stage 1 LoRA finetuning (Left: Ground Truth | Right: DiT
   <img src="assets/stage1_step_4100.gif" width="32%" />
 </p>
 
+## Preliminary Results (Stage 2)
+
+Early Stage 2 evaluation on **libero\_object** — the model starts to successfully complete manipulation tasks:
+
+<p align="center">
+  <img src="assets/task4_ep2.gif" width="32%" />
+  <img src="assets/task6_ep1.gif" width="32%" />
+  <img src="assets/task6_ep2.gif" width="32%" />
+</p>
+
+<p align="center">
+  <em>Task: pick up the bbq sauce and place it in the basket &nbsp;|&nbsp; pick up the tomato sauce and place it in the basket</em>
+</p>
+
 ## Overview
 
 - **Data**: Built-in support for all 4 LIBERO suites via `--suite` (`libero_spatial`, `libero_object`, `libero_goal`, `libero_10`). Uses 100% of available demonstrations for training to maximize simulated evaluation metrics.

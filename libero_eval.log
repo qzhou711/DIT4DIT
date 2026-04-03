@@ -780,3 +780,92 @@ Results saved to libero_eval_results.json
 2026-03-28 19:41:01,464 [INFO]   Episode 4/20: ❌ Fail (steps=600)
 2026-03-28 19:45:49,358 [INFO] Video saved: eval_videos/libero_object/task4_ep5.mp4 (600 frames)
 2026-03-28 19:45:49,358 [INFO]   Episode 5/20: ❌ Fail (steps=600)
+2026-04-03 13:41:34,864 [INFO] 
+############################################################
+2026-04-03 13:41:34,864 [INFO] # Evaluating suite: libero_object
+2026-04-03 13:41:34,864 [INFO] ############################################################
+2026-04-03 13:41:34,864 [INFO] 
+============================================================
+2026-04-03 13:41:34,864 [INFO] Suite: libero_object | Tasks: 10 | Episodes/task: 2
+2026-04-03 13:41:34,864 [INFO] ============================================================
+2026-04-03 13:41:36,517 [INFO] 
+--- Task 1/10: pick up the alphabet soup and place it in the basket ---
+2026-04-03 13:44:48,427 [INFO] Video saved: eval_videos/libero_object/task1_ep1.mp4 (600 frames)
+2026-04-03 13:44:48,427 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 13:48:05,477 [INFO] Video saved: eval_videos/libero_object/task1_ep2.mp4 (600 frames)
+2026-04-03 13:48:05,477 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 13:48:05,477 [INFO]   Task 1 SR: 0/2 = 0.0%
+2026-04-03 13:48:06,199 [INFO] 
+--- Task 2/10: pick up the cream cheese and place it in the basket ---
+2026-04-03 13:51:30,903 [INFO] Video saved: eval_videos/libero_object/task2_ep1.mp4 (600 frames)
+2026-04-03 13:51:30,903 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 13:54:59,101 [INFO] Video saved: eval_videos/libero_object/task2_ep2.mp4 (600 frames)
+2026-04-03 13:54:59,102 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 13:54:59,102 [INFO]   Task 2 SR: 0/2 = 0.0%
+2026-04-03 13:54:59,860 [INFO] 
+--- Task 3/10: pick up the salad dressing and place it in the basket ---
+2026-04-03 13:58:33,820 [INFO] Video saved: eval_videos/libero_object/task3_ep1.mp4 (600 frames)
+2026-04-03 13:58:33,820 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:02:09,641 [INFO] Video saved: eval_videos/libero_object/task3_ep2.mp4 (600 frames)
+2026-04-03 14:02:09,641 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:02:09,641 [INFO]   Task 3 SR: 0/2 = 0.0%
+2026-04-03 14:02:10,420 [INFO] 
+--- Task 4/10: pick up the bbq sauce and place it in the basket ---
+2026-04-03 14:05:45,912 [INFO] Video saved: eval_videos/libero_object/task4_ep1.mp4 (600 frames)
+2026-04-03 14:05:45,912 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:09:25,773 [INFO] Video saved: eval_videos/libero_object/task4_ep2.mp4 (600 frames)
+2026-04-03 14:09:25,773 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:09:25,773 [INFO]   Task 4 SR: 0/2 = 0.0%
+2026-04-03 14:09:26,468 [INFO] 
+--- Task 5/10: pick up the ketchup and place it in the basket ---
+2026-04-03 14:13:05,835 [INFO] Video saved: eval_videos/libero_object/task5_ep1.mp4 (600 frames)
+2026-04-03 14:13:05,835 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:16:50,272 [INFO] Video saved: eval_videos/libero_object/task5_ep2.mp4 (600 frames)
+2026-04-03 14:16:50,272 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:16:50,272 [INFO]   Task 5 SR: 0/2 = 0.0%
+2026-04-03 14:16:50,966 [INFO] 
+--- Task 6/10: pick up the tomato sauce and place it in the basket ---
+2026-04-03 14:20:29,184 [INFO] Video saved: eval_videos/libero_object/task6_ep1.mp4 (595 frames)
+2026-04-03 14:20:29,184 [INFO]   Episode 1/2: ✅ Success (steps=595)
+2026-04-03 14:24:10,738 [INFO] Video saved: eval_videos/libero_object/task6_ep2.mp4 (600 frames)
+2026-04-03 14:24:10,738 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:24:10,738 [INFO]   Task 6 SR: 1/2 = 50.0%
+2026-04-03 14:24:11,410 [INFO] 
+--- Task 7/10: pick up the butter and place it in the basket ---
+2026-04-03 14:27:52,483 [INFO] Video saved: eval_videos/libero_object/task7_ep1.mp4 (600 frames)
+2026-04-03 14:27:52,483 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:31:36,663 [INFO] Video saved: eval_videos/libero_object/task7_ep2.mp4 (600 frames)
+2026-04-03 14:31:36,664 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:31:36,664 [INFO]   Task 7 SR: 0/2 = 0.0%
+2026-04-03 14:31:37,340 [INFO] 
+--- Task 8/10: pick up the milk and place it in the basket ---
+2026-04-03 14:35:21,417 [INFO] Video saved: eval_videos/libero_object/task8_ep1.mp4 (600 frames)
+2026-04-03 14:35:21,417 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:39:13,070 [INFO] Video saved: eval_videos/libero_object/task8_ep2.mp4 (600 frames)
+2026-04-03 14:39:13,071 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:39:13,071 [INFO]   Task 8 SR: 0/2 = 0.0%
+2026-04-03 14:39:13,748 [INFO] 
+--- Task 9/10: pick up the chocolate pudding and place it in the basket ---
+2026-04-03 14:43:02,024 [INFO] Video saved: eval_videos/libero_object/task9_ep1.mp4 (600 frames)
+2026-04-03 14:43:02,024 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:46:45,275 [INFO] Video saved: eval_videos/libero_object/task9_ep2.mp4 (600 frames)
+2026-04-03 14:46:45,275 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:46:45,275 [INFO]   Task 9 SR: 0/2 = 0.0%
+2026-04-03 14:46:45,952 [INFO] 
+--- Task 10/10: pick up the orange juice and place it in the basket ---
+2026-04-03 14:50:35,321 [INFO] Video saved: eval_videos/libero_object/task10_ep1.mp4 (600 frames)
+2026-04-03 14:50:35,321 [INFO]   Episode 1/2: ❌ Fail (steps=600)
+2026-04-03 14:54:26,651 [INFO] Video saved: eval_videos/libero_object/task10_ep2.mp4 (600 frames)
+2026-04-03 14:54:26,651 [INFO]   Episode 2/2: ❌ Fail (steps=600)
+2026-04-03 14:54:26,651 [INFO]   Task 10 SR: 0/2 = 0.0%
+2026-04-03 14:54:26,781 [INFO] 
+============================================================
+2026-04-03 14:54:26,781 [INFO] Suite libero_object Summary: 1/20 = 5.0%
+2026-04-03 14:54:26,781 [INFO] ============================================================
+2026-04-03 14:54:26,794 [INFO] 
+############################################################
+2026-04-03 14:54:26,794 [INFO] # FINAL RESULTS
+2026-04-03 14:54:26,794 [INFO] ############################################################
+2026-04-03 14:54:26,794 [INFO]   libero_object       : 1/20 = 5.0%
+2026-04-03 14:54:26,794 [INFO] 
+Results saved to libero_eval_results.json
