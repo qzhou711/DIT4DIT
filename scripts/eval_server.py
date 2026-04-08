@@ -144,7 +144,11 @@ def load_model(args) -> MimicVideoPolicy:
     )
     backbone.load_lora(args.stage1_checkpoint)
     backbone.transformer.to(device)
-    backbone.offload_vae_and_text_encoder("cpu")
+    # Keep VAE on GPU to eliminate per-inference PCIe transfer (~30ms saved each call).
+    # Only offload text encoder (T5 embeddings are precomputed; text_encoder not needed at inference).
+    if backbone.text_encoder is not None:
+        backbone.text_encoder.to("cpu")
+    backbone.vae.to(device)
 
     log.info("Loading action decoder checkpoint...")
     decoder_path = os.path.join(args.stage2_checkpoint, "action_decoder.pt")
@@ -174,6 +178,8 @@ def load_model(args) -> MimicVideoPolicy:
     action_decoder.load_state_dict(state_dict)
     action_decoder.to(device)
     action_decoder.eval()
+    action_decoder = torch.compile(action_decoder, mode="reduce-overhead")
+    log.info("Action decoder compiled with torch.compile (reduce-overhead).")
 
     # Load action stats
     precomputed_dir = args.precomputed_dir

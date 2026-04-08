@@ -1,28 +1,163 @@
-"""Simple test script for Stage 1: predict future images from a checkpoint.
+"""Simple Stage-1 test script (single sample or all tasks).
 
 Usage:
+    # Single sample
     python scripts/test_stage1.py \
-    --suite libero_object \
-    --checkpoint ./checkpoints/libero_object/stage1/step_1000 \
-    --cosmos_model_id ./checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/f50c09f5d8ab133a90cac3f4886a6471e9ba3f18 \
-    --device cuda --ode_steps 10
+      --suite libero_object \
+      --checkpoint checkpoints/libero_object/stage1/step_8000 \
+      --cosmos_model_id checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/<id> \
+      --device cuda --ode_steps 20 --sample_idx 0 --output_path stage1_test.gif
+
+    # All 10 tasks in libero_object, one sample per task
+    python scripts/test_stage1.py \
+      --suite libero_object \
+      --checkpoint checkpoints/libero_object/stage1/step_8000 \
+      --cosmos_model_id checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/<id> \
+      --device cuda --all_tasks --samples_per_task 1 --output_dir stage1_all_tasks
+
+      python scripts/test_stage1.py \
+        --suite libero_object \
+        --checkpoint checkpoints/libero_object/stage1/step_8000 \
+        --cosmos_model_id checkpoints/models--nvidia--Cosmos-Predict2-2B-Video2World/snapshots/f50c09f5d8ab133a90cac3f4886a6471e9ba3f18 \
+        --device cuda \
+        --ode_steps 20 \
+        --full_episode \
+        --task_id 2 \
+        --episode_rank_in_task 0 \
+        --pred_frame_offset 0 \
+        --output_path stage1_task2_ep0_full.mp4
 """
 
 import os
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 import sys
 import argparse
-import torch
+import contextlib
+import json
+import re
+
 import numpy as np
+import torch
+import imageio.v2 as imageio
 from PIL import Image
-from torch.utils.data import DataLoader
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from configs.config import DataConfig, ModelConfig, get_suite_data_config, LIBERO_SUITES
+from configs.config import ModelConfig, get_suite_data_config, LIBERO_SUITES
 from mimic_video.data.dataset import MimicVideoDataset
 from mimic_video.models.video_backbone import CosmosVideoBackbone
 from mimic_video.models.flow_matching import FlowMatchingScheduler
+
+
+def sanitize_filename(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    return text.strip("_")[:80] or "task"
+
+
+def load_task_descriptions(precomputed_dir: str):
+    desc_path = os.path.join(precomputed_dir, "t5_task_descriptions.json")
+    if not os.path.exists(desc_path):
+        return {}
+    with open(desc_path, "r") as f:
+        data = json.load(f)
+    return {int(k): str(v) for k, v in data.items()}
+
+
+def to_video_np(x: torch.Tensor):
+    x = (x.squeeze(0).permute(1, 2, 3, 0).clamp(-1, 1) * 0.5 + 0.5) * 255
+    return x.cpu().to(torch.uint8).numpy()
+
+
+def save_side_by_side(gt_full: torch.Tensor, pred_full: torch.Tensor, save_path: str):
+    gt_np = to_video_np(gt_full)
+    pred_np = to_video_np(pred_full)
+    side_by_side = np.concatenate([gt_np, pred_np], axis=2)  # [T, H, 2W, C]
+    ext = os.path.splitext(save_path)[1].lower()
+    if ext == ".mp4":
+        imageio.mimsave(save_path, list(side_by_side), fps=10)
+        return
+    pil_frames = [Image.fromarray(f) for f in side_by_side]
+    pil_frames[0].save(
+        save_path,
+        save_all=True,
+        append_images=pil_frames[1:],
+        duration=100,  # 10 FPS
+        loop=0,
+    )
+
+
+def save_frame_sequence(frames, save_path: str):
+    ext = os.path.splitext(save_path)[1].lower()
+    if ext == ".mp4":
+        imageio.mimsave(save_path, frames, fps=10)
+        return
+    pil_frames = [Image.fromarray(f) for f in frames]
+    pil_frames[0].save(
+        save_path,
+        save_all=True,
+        append_images=pil_frames[1:],
+        duration=100,
+        loop=0,
+    )
+
+
+def predict_one_sample(
+    backbone,
+    fm,
+    batch,
+    num_cond_latent_frames: int,
+    compute_dtype,
+    device: str,
+    ode_steps: int,
+):
+    video = batch["video"].unsqueeze(0)  # [1, T, C, H, W]
+    video = video.permute(0, 2, 1, 3, 4).to(device)  # [1, C, T, H, W]
+
+    autocast_ctx = (
+        torch.amp.autocast("cuda", dtype=compute_dtype)
+        if device.startswith("cuda")
+        else contextlib.nullcontext()
+    )
+
+    with torch.inference_mode():
+        backbone.move_vae_to(device)
+        z_0 = backbone.encode_video(video)  # [1, C_lat, T_lat, H_lat, W_lat]
+        z_cond = z_0[:, :, :num_cond_latent_frames]
+        z_pred_gt = z_0[:, :, num_cond_latent_frames:]
+
+        if "t5_embedding" not in batch:
+            raise ValueError("Batch missing t5_embedding; run precompute_embeddings.py first.")
+        t5_emb = batch["t5_embedding"].unsqueeze(0).to(device, dtype=compute_dtype)
+        if t5_emb.ndim == 4 and t5_emb.shape[1] == 1:
+            t5_emb = t5_emb.squeeze(1)
+
+        z_noise = torch.randn_like(z_pred_gt)
+
+        def model_fn(z_t, tau):
+            tau_tensor = torch.tensor([tau], device=z_t.device, dtype=z_t.dtype)
+            with autocast_ctx:
+                _, full_out = backbone.forward_transformer(
+                    z_noisy=z_t,
+                    z_cond=z_cond,
+                    tau_v=tau_tensor,
+                    encoder_hidden_states=t5_emb,
+                )
+            x0_pred = full_out[:, :, num_cond_latent_frames:]
+            return (z_t - x0_pred) / max(tau, 1e-6)
+
+        z_pred_denoised = fm.ode_solve_euler(
+            model_fn, z_noise, num_steps=ode_steps, tau_start=1.0, tau_end=0.0
+        )
+
+        backbone.move_vae_to(device)
+        gt_full = backbone.decode_video(z_0)
+        pred_latents = torch.cat([z_cond, z_pred_denoised], dim=2)
+        pred_full = backbone.decode_video(pred_latents)
+
+        future_mse = torch.mean((z_pred_denoised.float() - z_pred_gt.float()) ** 2).item()
+
+    return gt_full, pred_full, future_mse
 
 
 def main():
@@ -30,25 +165,32 @@ def main():
     parser.add_argument("--suite", type=str, required=True, choices=list(LIBERO_SUITES.keys()))
     parser.add_argument("--checkpoint", type=str, required=True, help="Path to Stage 1 LoRA checkpoint")
     parser.add_argument("--cosmos_model_id", type=str, required=True, help="Path to Cosmos model")
-    parser.add_argument("--output_path", type=str, default="stage1_test.gif", help="Output GIF path")
+    parser.add_argument("--output_path", type=str, default="stage1_test.mp4", help="Output path (single-sample mode)")
+    parser.add_argument("--output_dir", type=str, default="stage1_test_outputs", help="Output dir (all-task mode)")
     parser.add_argument("--device", type=str, default="cuda")
-    parser.add_argument("--ode_steps", type=int, default=20, help="Euler ODE steps for denosing")
+    parser.add_argument("--ode_steps", type=int, default=20, help="Euler ODE steps for denoising")
+    parser.add_argument("--sample_idx", type=int, default=0, help="Dataset sample index in single-sample mode")
+    parser.add_argument("--all_tasks", action="store_true", help="Run all tasks in the selected suite")
+    parser.add_argument("--samples_per_task", type=int, default=1, help="-1 means all samples per task")
+    parser.add_argument("--save_format", type=str, default="mp4", choices=["mp4", "gif"], help="Output format")
+    parser.add_argument("--full_episode", action="store_true", help="Run one complete episode (rolling prediction)")
+    parser.add_argument("--task_id", type=int, default=0, help="Task id for --full_episode mode")
+    parser.add_argument("--episode_rank_in_task", type=int, default=0,
+                        help="Which episode in selected task for --full_episode mode (0-based)")
+    parser.add_argument("--pred_frame_offset", type=int, default=0,
+                        help="Future-frame offset in latent timeline for --full_episode mode")
     args = parser.parse_args()
 
     device = args.device
     if not torch.cuda.is_available() and device == "cuda":
         device = "cpu"
-    
     print(f"Using device: {device}")
 
-    # 1. Config
     data_config = get_suite_data_config(args.suite)
     model_config = ModelConfig()
     model_config.cosmos_model_id = args.cosmos_model_id
 
-    # 2. Dataset
     print(f"Loading dataset for {args.suite}...")
-    # Use only 1 episode for testing
     test_dataset = MimicVideoDataset(
         repo_id=data_config.repo_id,
         camera_names=data_config.camera_names,
@@ -60,15 +202,14 @@ def main():
         proprio_dim=data_config.proprio_dim,
         target_height=data_config.camera_height,
         target_width=data_config.camera_width,
-        episode_indices=[0],  # just the first episode
+        episode_indices=None,  # full suite
         precomputed_dir=data_config.precomputed_dir,
         action_norm_type=data_config.action_norm_type,
         fps=data_config.fps,
+        require_action_chunk=False,
     )
-    dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False)
-    batch = next(iter(dataloader))
-    
-    # 3. Model
+    print(f"Dataset size: {len(test_dataset)}")
+
     print("Initializing Cosmos video backbone...")
     backbone = CosmosVideoBackbone(
         model_id=model_config.cosmos_model_id,
@@ -79,91 +220,150 @@ def main():
         dtype=torch.bfloat16 if device == "cuda" else torch.float32,
         device=device,
     )
-    
     print(f"Loading LoRA from {args.checkpoint}...")
     backbone.load_lora(args.checkpoint, is_trainable=False)
     backbone.transformer.to(device)
     backbone.transformer.eval()
+    backbone.move_vae_to(device)
     backbone.offload_vae_and_text_encoder("cpu")
-    
-    # 4. Inference setup
+
     fm = FlowMatchingScheduler()
     num_cond_latent_frames = data_config.num_cond_latent_frames
+    num_pred_latent_frames = data_config.num_pred_latent_frames
     compute_dtype = torch.bfloat16 if device == "cuda" else torch.float32
 
-    # Prepare inputs
-    video = batch["video"][:1]  # [1, T, C, H, W]
-    video = video.permute(0, 2, 1, 3, 4).to(device)  # [1, C, T, H, W]
+    if args.full_episode:
+        if args.task_id < 0:
+            raise ValueError("--task_id must be >= 0")
+        if args.episode_rank_in_task < 0:
+            raise ValueError("--episode_rank_in_task must be >= 0")
+        if args.pred_frame_offset < 0 or args.pred_frame_offset >= num_pred_latent_frames:
+            raise ValueError(
+                f"--pred_frame_offset must be in [0, {num_pred_latent_frames - 1}]"
+            )
 
-    with torch.no_grad():
-        # Encode full video to latents
-        z_0 = backbone.encode_video(video)  # [1, C_lat, T_lat, H_lat, W_lat]
-        
-        z_cond = z_0[:, :, :num_cond_latent_frames]
-        z_pred_gt = z_0[:, :, num_cond_latent_frames:]
-        
-        # Get T5 embedding
-        if "t5_embedding" in batch:
-            t5_emb = batch["t5_embedding"][:1].to(device, dtype=compute_dtype)
-            if t5_emb.ndim == 4 and t5_emb.shape[1] == 1:
-                t5_emb = t5_emb.squeeze(1)
-        else:
-            # Try to load single-task t5 embedding if missing in batch
-            single_t5_path = os.path.join(data_config.precomputed_dir, "t5_embedding.pt")
-            if os.path.exists(single_t5_path):
-                t5_emb = torch.load(single_t5_path, map_location=device, weights_only=True).to(dtype=compute_dtype)
-                t5_emb = t5_emb.expand(1, -1, -1)
-            else:
-                raise ValueError("T5 embedding not found. Run precompute_embeddings.py first.")
+        episodes = test_dataset.lerobot_dataset.meta.episodes
+        ep_to_task = test_dataset.episode_to_task
+        task_episode_meta = [
+            ep for ep in episodes if ep_to_task.get(ep["episode_index"], -1) == args.task_id
+        ]
+        if not task_episode_meta:
+            raise ValueError(f"No episodes found for task_id={args.task_id}")
+        if args.episode_rank_in_task >= len(task_episode_meta):
+            raise ValueError(
+                f"--episode_rank_in_task={args.episode_rank_in_task} out of range "
+                f"(num_episodes_for_task={len(task_episode_meta)})"
+            )
 
-        # Inference loop (Euler ODE)
-        print(f"Running inference with {args.ode_steps} ODE steps...")
-        z_noise = torch.randn_like(z_pred_gt)
+        episode_meta = task_episode_meta[args.episode_rank_in_task]
+        ep_idx = episode_meta["episode_index"]
+        ep_start = episode_meta["dataset_from_index"]
+        ep_end = episode_meta["dataset_to_index"]
+        min_frames_needed = test_dataset.num_pixel_frames + test_dataset.action_chunk_size
+        last_start = ep_end - min_frames_needed
+        if last_start < ep_start:
+            raise ValueError("Episode too short for Stage-1 windowed prediction.")
 
-        def model_fn(z_t, tau):
-            tau_tensor = torch.tensor([tau], device=z_t.device, dtype=torch.float32)
-            with torch.amp.autocast("cuda", dtype=compute_dtype):
-                _, full_out = backbone.forward_transformer(
-                    z_noisy=z_t,
-                    z_cond=z_cond,
-                    tau_v=tau_tensor,
-                    encoder_hidden_states=t5_emb,
-                )
-            T_cond = num_cond_latent_frames
-            x0_pred = full_out[:, :, T_cond:]
-            return (z_t - x0_pred) / max(tau, 1e-6)
+        window_global_indices = list(range(ep_start, last_start + 1))
+        local_index_map = {g: i for i, g in enumerate(test_dataset.valid_indices)}
+        window_local_indices = [local_index_map[g] for g in window_global_indices if g in local_index_map]
+        if not window_local_indices:
+            raise ValueError("No valid local indices found for selected episode.")
 
-        z_pred_denoised = fm.ode_solve_euler(
-            model_fn, z_noise, num_steps=args.ode_steps, tau_start=1.0, tau_end=0.0
+        task_desc = load_task_descriptions(data_config.precomputed_dir)
+        task_name = task_desc.get(args.task_id, f"task_{args.task_id}")
+        print(
+            f"Running full episode | task_id={args.task_id} ({task_name}) "
+            f"| episode_index={ep_idx} | windows={len(window_local_indices)}"
         )
 
-        # 5. Decode and save
-        print("Decoding predicted latents...")
-        gt_full = backbone.decode_video(z_0)  # [1, C, T, H, W]
-        pred_latents = torch.cat([z_cond, z_pred_denoised], dim=2)
-        pred_full = backbone.decode_video(pred_latents)  # [1, C, T, H, W]
+        compare_frames = []
+        mse_list = []
+        frame_idx = num_cond_latent_frames + args.pred_frame_offset
+        for step_i, sample_idx in enumerate(window_local_indices):
+            batch = test_dataset[sample_idx]
+            gt_full, pred_full, future_mse = predict_one_sample(
+                backbone, fm, batch, num_cond_latent_frames, compute_dtype, device, args.ode_steps
+            )
+            mse_list.append(future_mse)
 
-    # Convert to uint8 numpy: [T, H, W, C]
-    def to_video_np(x):
-        x = (x.squeeze(0).permute(1, 2, 3, 0).clamp(-1, 1) * 0.5 + 0.5) * 255
-        return x.cpu().to(torch.uint8).numpy()
+            gt_np = to_video_np(gt_full)
+            pred_np = to_video_np(pred_full)
+            gt_f = gt_np[frame_idx]
+            pred_f = pred_np[frame_idx]
+            compare_frames.append(np.concatenate([gt_f, pred_f], axis=1))
 
-    gt_np = to_video_np(gt_full)
-    pred_np = to_video_np(pred_full)
+            if (step_i + 1) % 50 == 0 or step_i == 0 or (step_i + 1) == len(window_local_indices):
+                print(f"  progress: {step_i + 1}/{len(window_local_indices)} windows")
 
-    # Side-by-side
-    side_by_side = np.concatenate([gt_np, pred_np], axis=2)  # [T, H, 2*W, C]
+        out_path = args.output_path
+        root, ext = os.path.splitext(out_path)
+        if ext.lower() not in [".mp4", ".gif"]:
+            out_path = f"{root}.{args.save_format}"
+        save_frame_sequence(compare_frames, out_path)
+        backbone.offload_vae_and_text_encoder("cpu")
+        print(f"Saved full-episode comparison to: {out_path}")
+        print(f"Full-episode window MSE mean: {float(np.mean(mse_list)):.6f}")
+        print(f"Full-episode window MSE std : {float(np.std(mse_list)):.6f}")
+        return
 
-    print(f"Saving GIF to {args.output_path}...")
-    pil_frames = [Image.fromarray(f) for f in side_by_side]
-    pil_frames[0].save(
-        args.output_path,
-        save_all=True,
-        append_images=pil_frames[1:],
-        duration=100,  # 10 FPS
-        loop=0
-    )
-    print("Done!")
+    if not args.all_tasks:
+        if args.sample_idx < 0 or args.sample_idx >= len(test_dataset):
+            raise ValueError(f"--sample_idx out of range: {args.sample_idx}, dataset size={len(test_dataset)}")
+        print(f"Running single sample: idx={args.sample_idx}, ode_steps={args.ode_steps}")
+        batch = test_dataset[args.sample_idx]
+        gt_full, pred_full, future_mse = predict_one_sample(
+            backbone, fm, batch, num_cond_latent_frames, compute_dtype, device, args.ode_steps
+        )
+        print(f"Future latent MSE: {future_mse:.6f}")
+        out_path = args.output_path
+        root, ext = os.path.splitext(out_path)
+        if ext.lower() not in [".mp4", ".gif"]:
+            out_path = f"{root}.{args.save_format}"
+        print(f"Saving to {out_path}...")
+        save_side_by_side(gt_full, pred_full, out_path)
+        backbone.offload_vae_and_text_encoder("cpu")
+        print("Done!")
+        return
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    task_desc = load_task_descriptions(data_config.precomputed_dir)
+    task_to_indices = {}
+    for local_idx, global_idx in enumerate(test_dataset.valid_indices):
+        task_idx = test_dataset._get_task_index_for_global_idx(global_idx)
+        task_to_indices.setdefault(task_idx, []).append(local_idx)
+
+    print(f"Running all tasks with ode_steps={args.ode_steps}, samples_per_task={args.samples_per_task}")
+    all_mse = []
+    for task_idx in sorted(task_to_indices.keys()):
+        indices = task_to_indices[task_idx]
+        chosen = indices if args.samples_per_task < 0 else indices[:args.samples_per_task]
+        desc = task_desc.get(task_idx, f"task_{task_idx}")
+        task_slug = sanitize_filename(desc)
+        task_dir = os.path.join(args.output_dir, f"task_{task_idx:02d}_{task_slug}")
+        os.makedirs(task_dir, exist_ok=True)
+        print(f"\nTask {task_idx}: {desc}")
+        print(f"  samples selected: {len(chosen)} / total {len(indices)}")
+
+        for rank_i, sample_idx in enumerate(chosen):
+            batch = test_dataset[sample_idx]
+            gt_full, pred_full, future_mse = predict_one_sample(
+                backbone, fm, batch, num_cond_latent_frames, compute_dtype, device, args.ode_steps
+            )
+            all_mse.append(future_mse)
+            save_name = f"sample_{rank_i:04d}_datasetidx_{sample_idx:07d}_mse_{future_mse:.6f}.{args.save_format}"
+            save_path = os.path.join(task_dir, save_name)
+            save_side_by_side(gt_full, pred_full, save_path)
+            print(f"  [{rank_i + 1}/{len(chosen)}] mse={future_mse:.6f} -> {save_name}")
+
+    backbone.offload_vae_and_text_encoder("cpu")
+
+    if all_mse:
+        print("\nAll-task run done.")
+        print(f"Future latent MSE mean: {float(np.mean(all_mse)):.6f}")
+        print(f"Future latent MSE std : {float(np.std(all_mse)):.6f}")
+    print(f"Outputs saved to: {args.output_dir}")
+
 
 if __name__ == "__main__":
     main()

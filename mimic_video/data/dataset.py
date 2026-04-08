@@ -34,6 +34,8 @@ class MimicVideoDataset(Dataset):
         action_stats: Optional[Dict[str, torch.Tensor]] = None,
         action_norm_type: str = "min-max",
         fps: int = 10,
+        require_action_chunk: bool = True,
+        allow_partial_action_chunk: bool = False,
     ):
         from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
@@ -50,6 +52,9 @@ class MimicVideoDataset(Dataset):
         self.precomputed_dir = precomputed_dir
         self.action_norm_type = action_norm_type
         self.fps = fps
+        self.require_action_chunk = require_action_chunk
+        self.allow_partial_action_chunk = allow_partial_action_chunk
+        self._index_to_episode_end = {}
 
         # Only use delta_timestamps for cameras (video decode needs it)
         delta_timestamps = {}
@@ -121,6 +126,7 @@ class MimicVideoDataset(Dataset):
 
     def _build_valid_indices(self, episode_indices: Optional[list] = None):
         self.valid_indices = []
+        self._index_to_episode_end = {}
         episodes = self.lerobot_dataset.meta.episodes
 
         for i in range(len(episodes)):
@@ -133,13 +139,20 @@ class MimicVideoDataset(Dataset):
             ep_end = ep["dataset_to_index"]
             ep_len = ep_end - ep_start
 
-            min_frames_needed = self.num_pixel_frames + self.action_chunk_size
+            if not self.require_action_chunk:
+                min_frames_needed = self.num_pixel_frames
+            elif self.allow_partial_action_chunk:
+                # Need full video window plus at least one future action.
+                min_frames_needed = self.num_pixel_frames + 1
+            else:
+                min_frames_needed = self.num_pixel_frames + self.action_chunk_size
             if ep_len < min_frames_needed:
                 continue
 
             for frame_offset in range(ep_len - min_frames_needed + 1):
                 global_idx = ep_start + frame_offset
                 self.valid_indices.append(global_idx)
+                self._index_to_episode_end[global_idx] = ep_end
 
     def __len__(self) -> int:
         return len(self.valid_indices)
@@ -181,8 +194,8 @@ class MimicVideoDataset(Dataset):
         else:
             return actions
 
-    def _get_state_action(self, global_idx: int):
-        """Load state and action chunk by directly indexing consecutive frames."""
+    def _get_proprio(self, global_idx: int) -> torch.Tensor:
+        """Load proprio state at current frame."""
         # State at current frame
         row = self.lerobot_dataset.hf_dataset[global_idx]
         proprio_parts = []
@@ -192,10 +205,29 @@ class MimicVideoDataset(Dataset):
                 val = torch.tensor(val, dtype=torch.float32)
             proprio_parts.append(val.float().flatten())
         proprio = torch.cat(proprio_parts)[:self.proprio_dim]
+        return proprio
+
+    def _get_action_chunk(self, global_idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Load action chunk and mask by directly indexing consecutive frames.
+
+        Returns:
+            actions: [action_chunk_size, action_dim]
+            action_mask: [action_chunk_size, 1], 1 for valid targets, 0 for padded tail.
+        """
+        if global_idx not in self._index_to_episode_end:
+            raise KeyError(f"global_idx={global_idx} not found in episode boundary map")
+        ep_end = self._index_to_episode_end[global_idx]
+        available_future = max(0, ep_end - global_idx - 1)
+        valid_len = min(self.action_chunk_size, available_future)
+        if valid_len <= 0:
+            raise ValueError(
+                f"No future actions available for global_idx={global_idx}; "
+                "increase filtering constraints."
+            )
 
         # Action chunk: gather from consecutive frames
         action_rows = []
-        for offset in range(1, self.action_chunk_size + 1):
+        for offset in range(1, valid_len + 1):
             a_row = self.lerobot_dataset.hf_dataset[global_idx + offset]
             parts = []
             for ak in self.action_keys:
@@ -204,21 +236,41 @@ class MimicVideoDataset(Dataset):
                     val = torch.tensor(val, dtype=torch.float32)
                 parts.append(val.float().flatten())
             action_rows.append(torch.cat(parts))
-        actions = torch.stack(action_rows)[:, :self.action_dim]
+        actions = torch.stack(action_rows)[:, :self.action_dim]  # [valid_len, action_dim]
 
-        return proprio, actions
+        if valid_len < self.action_chunk_size:
+            if self.allow_partial_action_chunk:
+                # Pad with the last valid action; the mask ensures padded tail has zero loss.
+                pad_count = self.action_chunk_size - valid_len
+                pad_rows = actions[-1:].repeat(pad_count, 1)
+                actions = torch.cat([actions, pad_rows], dim=0)
+            else:
+                raise ValueError(
+                    f"Insufficient future actions at global_idx={global_idx}: "
+                    f"valid_len={valid_len}, expected={self.action_chunk_size}"
+                )
+
+        action_mask = torch.zeros(self.action_chunk_size, 1, dtype=torch.float32)
+        action_mask[:valid_len] = 1.0
+        return actions, action_mask
 
     def compute_action_stats(self, max_samples: int = 10000) -> Dict[str, torch.Tensor]:
         """Compute mean and standard deviation of actions from the dataset."""
+        if not self.require_action_chunk:
+            raise ValueError("compute_action_stats requires require_action_chunk=True")
         num_samples = min(len(self.valid_indices), max_samples)
         indices = np.random.choice(len(self.valid_indices), num_samples, replace=False)
         
         all_actions = []
         for idx in indices:
             global_idx = self.valid_indices[idx]
-            _, actions = self._get_state_action(global_idx)
-            all_actions.append(actions)
-            
+            actions, action_mask = self._get_action_chunk(global_idx)
+            valid = action_mask.squeeze(-1) > 0
+            if valid.any():
+                all_actions.append(actions[valid])
+
+        if not all_actions:
+            raise ValueError("No valid action rows collected for action stats.")
         all_actions = torch.cat(all_actions, dim=0)
         
         return {
@@ -244,15 +296,16 @@ class MimicVideoDataset(Dataset):
         video = concat_cameras(camera_frames, self.target_height, self.target_width)
         video = normalize_to_neg1_pos1(video)
 
-        # Get state/action by direct parquet indexing (fast)
-        proprio, actions = self._get_state_action(global_idx)
-        actions = self.normalize_actions(actions)
-
         result = {
             "video": video,
-            "proprio": proprio,
-            "actions": actions,
+            "proprio": self._get_proprio(global_idx),
         }
+
+        # Stage-2 requires action chunk; Stage-1 can disable this to keep episode tail samples.
+        if self.require_action_chunk:
+            actions, action_mask = self._get_action_chunk(global_idx)
+            result["actions"] = self.normalize_actions(actions)
+            result["action_mask"] = action_mask
 
         # Multi-task: return per-sample T5 embedding based on task_index
         if self.t5_embeddings is not None:

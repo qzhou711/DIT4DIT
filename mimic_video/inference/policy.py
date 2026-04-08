@@ -156,7 +156,7 @@ class MimicVideoPolicy(nn.Module):
             raise ValueError(f"Unknown action normalization type: {self.action_norm_type}")
         return actions
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def predict_action(
         self,
         video_frames: torch.Tensor,
@@ -199,13 +199,13 @@ class MimicVideoPolicy(nn.Module):
         # video_frames: [1, T, C, H, W] -> [1, C, T, H, W]
         video_bcthw = video_frames.permute(0, 2, 1, 3, 4)
 
-        self.backbone.move_vae_to(device)
+        # VAE stays on GPU (moved once at server startup); no offload per inference.
         z_all = self.backbone.encode_video(video_bcthw)  # [1, C_lat, T_lat, H_lat, W_lat]
-        self.backbone.move_vae_to("cpu")
 
-        # Split: z_cond (first 2 latent frames), z_pred_clean (last 3, for reference)
+        # Split: z_cond = real conditioning latents (from encoded frames)
         z_cond = z_all[:, :, :self.num_cond_latent_frames]
-        T_lat_total = z_all.shape[2]
+        # T_lat_total = total latent frames backbone will process (cond + pred noise)
+        T_lat_total = self.num_cond_latent_frames + self.num_pred_latent_frames
 
         # 2. Handle future video frames
         C_lat, H_lat, W_lat = z_all.shape[1], z_all.shape[3], z_all.shape[4]

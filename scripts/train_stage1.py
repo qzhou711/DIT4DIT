@@ -172,6 +172,7 @@ def main():
         precomputed_dir=data_config.precomputed_dir,
         action_norm_type=data_config.action_norm_type,
         fps=data_config.fps,
+        require_action_chunk=False,
     )
 
     if is_main:

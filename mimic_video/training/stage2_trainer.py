@@ -128,12 +128,15 @@ class Stage2Trainer:
         video = batch["video"]        # [B, T, C, H, W]
         proprio = batch["proprio"]    # [B, proprio_dim]
         actions = batch["actions"]    # [B, T_action, action_dim]
+        action_mask = batch.get("action_mask", None)  # [B, T_action, 1], optional
         B = video.shape[0]
 
         # Rearrange video to [B, C, T, H, W]
         video = video.permute(0, 2, 1, 3, 4).to(self.device)
         proprio = proprio.to(self.device).float()
         actions = actions.to(self.device).float()
+        if action_mask is not None:
+            action_mask = action_mask.to(self.device).float()
 
         # 1. Encode video with frozen VAE
         with torch.no_grad():
@@ -207,7 +210,16 @@ class Stage2Trainer:
 
         # 6. Compute loss
         velocity_target = self.fm.velocity_target(actions, eps_a)
-        loss = self.fm.compute_loss(velocity_pred.float(), velocity_target.float())
+        loss_mask = None
+        if action_mask is not None:
+            # Broadcast [B, T, 1] -> [B, T, action_dim]
+            if action_mask.shape[-1] == 1:
+                loss_mask = action_mask.expand(-1, -1, actions.shape[-1])
+            else:
+                loss_mask = action_mask
+        loss = self.fm.compute_loss(
+            velocity_pred.float(), velocity_target.float(), mask=loss_mask
+        )
 
         # Scale for gradient accumulation
         loss = loss / self.gradient_accumulation_steps

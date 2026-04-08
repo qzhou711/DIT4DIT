@@ -87,6 +87,10 @@ def main():
                         help="Disable gradient checkpointing (faster, uses more VRAM)")
     parser.add_argument("--lr", type=float, default=None,
                         help="Override learning rate (e.g. scale with batch size: lr=1e-4*(batch/200))")
+    parser.add_argument("--allow_partial_action_chunk", action="store_true", default=True,
+                        help="Include episode tail samples with shorter future actions; padded tail is masked in loss. (default: on)")
+    parser.add_argument("--disable_partial_action_chunk", action="store_true",
+                        help="Disable partial action chunk training and require full action_chunk_size targets.")
     args = parser.parse_args()
 
     # Setup distributed
@@ -189,6 +193,8 @@ def main():
         precomputed_dir=data_config.precomputed_dir,
         action_norm_type=data_config.action_norm_type,
         fps=data_config.fps,
+        require_action_chunk=True,
+        allow_partial_action_chunk=(args.allow_partial_action_chunk and not args.disable_partial_action_chunk),
     )
 
     # Compute or load action stats

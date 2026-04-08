@@ -226,6 +226,7 @@ def precompute_vae_latents(
         target_height=data_config.camera_height,
         target_width=data_config.camera_width,
         fps=data_config.fps,
+        require_action_chunk=False,
     )
 
     latents_dir = os.path.join(output_dir, "vae_latents")

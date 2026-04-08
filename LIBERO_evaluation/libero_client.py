@@ -13,6 +13,16 @@ NOTE: The model server must be running first:
     python scripts/eval_server.py \
         --stage1_checkpoint checkpoints/stage1/final \
         --stage2_checkpoint checkpoints/stage2/final
+
+
+
+        python LIBERO_evaluation/libero_client.py \
+            --server_url ws://localhost:8765 \
+            --suites libero_object \
+            --num_episodes 3 \
+            --save_video \
+            --debug_rollout_log \
+            --debug_log_interval 20
 """
 
 import os
@@ -46,7 +56,7 @@ parser = argparse.ArgumentParser(description="LIBERO evaluation client")
 parser.add_argument("--server_url", type=str, default="ws://localhost:8765")
 parser.add_argument("--suites", nargs="+",
                     default=["libero_spatial", "libero_object", "libero_goal", "libero_10"])
-parser.add_argument("--max_steps", type=int, default=600)
+parser.add_argument("--max_steps", type=int, default=1000)
 parser.add_argument("--num_episodes", type=int, default=20)
 parser.add_argument("--action_horizon", type=int, default=8, #16
                     help="Number of actions to execute from each predicted chunk")
@@ -55,11 +65,17 @@ parser.add_argument("--seed", type=int, default=42)
 parser.add_argument("--save_video", action="store_true")
 parser.add_argument("--video_dir", type=str, default="eval_videos")
 parser.add_argument("--log_file", type=str, default="libero_eval.log")
-parser.add_argument("--warmup_frames", type=int, default=5,
+parser.add_argument("--warmup_frames", type=int, default=30,
                     help="Number of real warmup frames to push before first query")
+parser.add_argument("--debug_rollout_log", action="store_true",
+                    help="Enable verbose rollout logs (reward/done/info snapshots)")
+parser.add_argument("--debug_log_interval", type=int, default=50,
+                    help="Step interval for rollout debug logs (when --debug_rollout_log is set)")
 args = parser.parse_args()
 if args.warmup_frames < 1:
     raise ValueError("--warmup_frames must be >= 1")
+if args.debug_log_interval < 1:
+    raise ValueError("--debug_log_interval must be >= 1")
 
 # ========= Logging =========
 logging.basicConfig(
@@ -171,6 +187,11 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                 # Reset environment
                 env.reset()
                 obs = env.set_init_state(init_states[ep])
+                episode_done = False
+                success = False
+                frames = []
+                step_count = 0
+                episode_end_reason = "unknown"
 
                 # Signal frame buffer reset before warmup
                 await ws.send(json.dumps({"reset": True}))
@@ -180,7 +201,21 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                 # Keep this aligned with server-side inference frame window
                 # (--num_infer_real_frames, default 5).
                 for _ in range(args.warmup_frames):
-                    obs, _, _, _ = env.step(DUMMY_ACTION)
+                    try:
+                        obs, _, done, _ = env.step(DUMMY_ACTION)
+                    except ValueError as ve:
+                        err = str(ve).lower()
+                        if "terminated episode" in err:
+                            log.warning(
+                                "Episode terminated during warmup; skipping rollout "
+                                f"(task={task_id + 1}, ep={ep + 1})."
+                            )
+                            episode_end_reason = "terminated_during_warmup"
+                        else:
+                            log.error(f"Invalid action during warmup: {ve}")
+                            episode_end_reason = "invalid_action_during_warmup"
+                        episode_done = True
+                        break
                     agentview_w, wrist_w, _ = extract_obs_data(obs)
                     await ws.send(json.dumps({
                         "add_frame": True,
@@ -190,13 +225,18 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                         ],
                     }))
                     await ws.recv()
+                    if done:
+                        log.warning(
+                            "Episode reached done during warmup; skipping rollout "
+                            f"(task={task_id + 1}, ep={ep + 1})."
+                        )
+                        episode_end_reason = "done_during_warmup"
+                        episode_done = True
+                        break
 
-                episode_done = False
-                success = False
-                frames = []
-                step_count = 0
+                gripper_state = -1.0  # start open; sticky gripper state persists across chunks
 
-                while step_count < max_steps:
+                while step_count < max_steps and not episode_done:
                     # === Query model for action chunk ===
                     agentview, wrist, state = extract_obs_data(obs)
                     query_msg = {
@@ -218,25 +258,51 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                         break
 
                     # === Execute action chunk ===
+                    # Sticky gripper: only switch state when prediction clearly
+                    # crosses a hysteresis threshold, avoiding oscillation near zero.
+                    # Confirmed convention: +1 = close, -1 = open (robosuite / [-1,1] range)
+                    CLOSE_THRESH =  0.3
+                    OPEN_THRESH  = -0.3
                     for i in range(min(action_horizon, len(action_chunk))):
                         action = list(action_chunk[i])
 
-                        # Gripper: training data uses {-1, 1} directly
-                        # LIBERO also expects [-1, 1] for gripper
-                        # Clip gripper to valid range, threshold to binary
-                        if action[6] >= 0:
-                            action[6] = 1.0    # open
-                        else:
-                            action[6] = -1.0   # close
+                        g = action[6]
+                        if g > CLOSE_THRESH:
+                            gripper_state = 1.0
+                        elif g < OPEN_THRESH:
+                            gripper_state = -1.0
+                        # within [-0.3, 0.3]: keep previous gripper_state
+                        action[6] = gripper_state
 
                         try:
                             obs, reward, done, info = env.step(action[:7])
                         except ValueError as ve:
-                            log.error(f"Invalid action: {ve}")
+                            err = str(ve).lower()
+                            if "terminated episode" in err:
+                                log.warning(
+                                    "Episode already terminated before step; "
+                                    f"stop current episode (task={task_id + 1}, ep={ep + 1}, step={step_count})."
+                                )
+                                episode_end_reason = "terminated_before_step"
+                            else:
+                                log.error(f"Invalid action: {ve}")
+                                episode_end_reason = "invalid_action"
                             episode_done = True
                             break
 
                         step_count += 1
+                        if args.debug_rollout_log and (
+                            step_count == 1 or step_count % args.debug_log_interval == 0 or done
+                        ):
+                            log.info(
+                                "Rollout debug | task=%d ep=%d step=%d reward=%.4f done=%s info=%s",
+                                task_id + 1,
+                                ep + 1,
+                                step_count,
+                                float(reward),
+                                str(done),
+                                str(info),
+                            )
 
                         # Send intermediate frame to server to maintain temporal context
                         agentview_mid, wrist_mid, _ = extract_obs_data(obs)
@@ -261,11 +327,14 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                         if done:
                             episode_done = True
                             success = True
+                            episode_end_reason = "success_predicate_triggered"
                             task_success += 1
                             total_success += 1
                             break
 
                     if episode_done or step_count >= max_steps:
+                        if step_count >= max_steps and not success and episode_end_reason == "unknown":
+                            episode_end_reason = "max_steps_reached"
                         break
 
                 # Save video
@@ -278,7 +347,12 @@ async def evaluate_suite(server_url, suite_name, max_steps, num_episodes, action
                     )
 
                 status = "✅ Success" if success else "❌ Fail"
-                log.info(f"  Episode {ep + 1}/{task_episodes}: {status} (steps={step_count})")
+                if episode_end_reason == "unknown":
+                    episode_end_reason = "loop_exited_without_explicit_reason"
+                log.info(
+                    f"  Episode {ep + 1}/{task_episodes}: {status} "
+                    f"(steps={step_count}, reason={episode_end_reason})"
+                )
 
             task_sr = task_success / task_episodes if task_episodes > 0 else 0
             suite_results[task_description] = {
