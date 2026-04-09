@@ -35,3 +35,4 @@ torchrun --nproc_per_node=4 scripts/train_stage1.py \
     --suite libero_spatial \
     --preset a100_40g \
     --wandb_project "dit4dit-stage1_spatial"
+    --resume  checkpoints/libero_spatial/stage1/step_7000

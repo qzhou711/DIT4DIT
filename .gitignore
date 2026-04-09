@@ -21,11 +21,14 @@ outputs/
 *.safetensors
 eval_videos/
 models--nvidia--Cosmos-Predict2-2B-Video2World/
+
 libero_eval.log
 libero_eval_results.json
+
+scripts/logs
 # Jupyter
 .ipynb_checkpoints/
-
+scripts/devices/logs
 # IDE
 .vscode/
 .idea/
