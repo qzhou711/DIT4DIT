@@ -214,6 +214,8 @@ def precompute_vae_latents(
     latents_std = torch.tensor(vae.config.latents_std).view(1, z_dim, 1, 1, 1).to(device)
 
     print("Loading dataset...")
+    train_episodes = list(range(data_config.train_episodes))
+    # Video-only: do not require future actions in the window (see MimicVideoDataset.require_action_chunk).
     dataset = MimicVideoDataset(
         repo_id=data_config.repo_id,
         camera_names=data_config.camera_names,
@@ -225,8 +227,12 @@ def precompute_vae_latents(
         proprio_dim=data_config.proprio_dim,
         target_height=data_config.camera_height,
         target_width=data_config.camera_width,
+        episode_indices=train_episodes,
+        precomputed_dir=data_config.precomputed_dir,
+        action_norm_type=data_config.action_norm_type,
         fps=data_config.fps,
         require_action_chunk=False,
+        allow_partial_action_chunk=False,
     )
 
     latents_dir = os.path.join(output_dir, "vae_latents")

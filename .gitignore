@@ -39,3 +39,7 @@ wandb/
 scripts/*.csv
 # macOS
 .DS_Store
+
+stage1_full_all_tasks_3eps_4000_after/
+stage1_full_all_tasks_3eps_5000_after/
+stage1_full_all_tasks_3eps_8000_pre/

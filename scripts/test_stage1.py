@@ -160,6 +160,15 @@ def predict_one_sample(
     return gt_full, pred_full, future_mse
 
 
+def pick_frame_idx(gt_np: np.ndarray, frame_pick: str, num_cond_latent_frames: int, pred_frame_offset: int) -> int:
+    if frame_pick == "last":
+        return gt_np.shape[0] - 1
+    if frame_pick == "mid":
+        return gt_np.shape[0] // 2
+    idx = num_cond_latent_frames + pred_frame_offset
+    return min(max(idx, 0), gt_np.shape[0] - 1)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Test Stage 1: future image prediction")
     parser.add_argument("--suite", type=str, required=True, choices=list(LIBERO_SUITES.keys()))
@@ -179,6 +188,8 @@ def main():
                         help="Which episode in selected task for --full_episode mode (0-based)")
     parser.add_argument("--pred_frame_offset", type=int, default=0,
                         help="Future-frame offset in latent timeline for --full_episode mode")
+    parser.add_argument("--frame_pick", type=str, default="last", choices=["early", "mid", "last"],
+                        help="Which frame to pick from each window in --full_episode mode")
     args = parser.parse_args()
 
     device = args.device
@@ -232,11 +243,56 @@ def main():
     num_pred_latent_frames = data_config.num_pred_latent_frames
     compute_dtype = torch.bfloat16 if device == "cuda" else torch.float32
 
+    def run_one_full_episode(task_id: int, episode_meta: dict, out_path: str):
+        ep_idx = episode_meta["episode_index"]
+        ep_start = episode_meta["dataset_from_index"]
+        ep_end = episode_meta["dataset_to_index"]
+        # Stage-1 full-episode visualization should only require a full video window.
+        min_frames_needed = test_dataset.num_pixel_frames
+        last_start = ep_end - min_frames_needed
+        if last_start < ep_start:
+            raise ValueError(
+                f"Episode too short for Stage-1 windowed prediction. "
+                f"task_id={task_id}, episode_index={ep_idx}"
+            )
+
+        window_global_indices = list(range(ep_start, last_start + 1))
+        local_index_map = {g: i for i, g in enumerate(test_dataset.valid_indices)}
+        window_local_indices = [local_index_map[g] for g in window_global_indices if g in local_index_map]
+        if not window_local_indices:
+            raise ValueError(
+                f"No valid local indices for task_id={task_id}, episode_index={ep_idx}"
+            )
+
+        compare_frames = []
+        mse_list = []
+        print(
+            f"  full episode | task_id={task_id} episode_index={ep_idx} "
+            f"windows={len(window_local_indices)}"
+        )
+        for step_i, sample_idx in enumerate(window_local_indices):
+            batch = test_dataset[sample_idx]
+            gt_full, pred_full, future_mse = predict_one_sample(
+                backbone, fm, batch, num_cond_latent_frames, compute_dtype, device, args.ode_steps
+            )
+            mse_list.append(future_mse)
+
+            gt_np = to_video_np(gt_full)
+            pred_np = to_video_np(pred_full)
+            frame_idx = pick_frame_idx(
+                gt_np, args.frame_pick, num_cond_latent_frames, args.pred_frame_offset
+            )
+            gt_f = gt_np[frame_idx]
+            pred_f = pred_np[frame_idx]
+            compare_frames.append(np.concatenate([gt_f, pred_f], axis=1))
+
+            if (step_i + 1) % 50 == 0 or step_i == 0 or (step_i + 1) == len(window_local_indices):
+                print(f"    progress: {step_i + 1}/{len(window_local_indices)} windows")
+
+        save_frame_sequence(compare_frames, out_path)
+        return float(np.mean(mse_list)), float(np.std(mse_list)), len(window_local_indices)
+
     if args.full_episode:
-        if args.task_id < 0:
-            raise ValueError("--task_id must be >= 0")
-        if args.episode_rank_in_task < 0:
-            raise ValueError("--episode_rank_in_task must be >= 0")
         if args.pred_frame_offset < 0 or args.pred_frame_offset >= num_pred_latent_frames:
             raise ValueError(
                 f"--pred_frame_offset must be in [0, {num_pred_latent_frames - 1}]"
@@ -244,6 +300,45 @@ def main():
 
         episodes = test_dataset.lerobot_dataset.meta.episodes
         ep_to_task = test_dataset.episode_to_task
+        task_desc = load_task_descriptions(data_config.precomputed_dir)
+        if args.all_tasks:
+            os.makedirs(args.output_dir, exist_ok=True)
+            task_episode_map = {}
+            for ep in episodes:
+                t_idx = ep_to_task.get(ep["episode_index"], -1)
+                if t_idx >= 0:
+                    task_episode_map.setdefault(t_idx, []).append(ep)
+
+            all_means = []
+            for task_idx in sorted(task_episode_map.keys()):
+                task_name = task_desc.get(task_idx, f"task_{task_idx}")
+                task_slug = sanitize_filename(task_name)
+                task_dir = os.path.join(args.output_dir, f"task_{task_idx:02d}_{task_slug}")
+                os.makedirs(task_dir, exist_ok=True)
+                task_eps = task_episode_map[task_idx]
+                chosen_eps = task_eps if args.samples_per_task < 0 else task_eps[:args.samples_per_task]
+                print(f"\nTask {task_idx}: {task_name} | episodes={len(chosen_eps)}/{len(task_eps)}")
+                for ep_rank, ep_meta in enumerate(chosen_eps):
+                    out_path = os.path.join(
+                        task_dir,
+                        f"episode_{ep_rank:03d}_epidx_{ep_meta['episode_index']}.{args.save_format}",
+                    )
+                    mse_mean, mse_std, nwin = run_one_full_episode(task_idx, ep_meta, out_path)
+                    all_means.append(mse_mean)
+                    print(
+                        f"    saved: {out_path} | windows={nwin} "
+                        f"| mse_mean={mse_mean:.6f} mse_std={mse_std:.6f}"
+                    )
+            backbone.offload_vae_and_text_encoder("cpu")
+            if all_means:
+                print(f"\nAll full-episode runs done. Global mean MSE: {float(np.mean(all_means)):.6f}")
+            print(f"Outputs saved to: {args.output_dir}")
+            return
+
+        if args.task_id < 0:
+            raise ValueError("--task_id must be >= 0")
+        if args.episode_rank_in_task < 0:
+            raise ValueError("--episode_rank_in_task must be >= 0")
         task_episode_meta = [
             ep for ep in episodes if ep_to_task.get(ep["episode_index"], -1) == args.task_id
         ]
@@ -256,55 +351,20 @@ def main():
             )
 
         episode_meta = task_episode_meta[args.episode_rank_in_task]
-        ep_idx = episode_meta["episode_index"]
-        ep_start = episode_meta["dataset_from_index"]
-        ep_end = episode_meta["dataset_to_index"]
-        min_frames_needed = test_dataset.num_pixel_frames + test_dataset.action_chunk_size
-        last_start = ep_end - min_frames_needed
-        if last_start < ep_start:
-            raise ValueError("Episode too short for Stage-1 windowed prediction.")
-
-        window_global_indices = list(range(ep_start, last_start + 1))
-        local_index_map = {g: i for i, g in enumerate(test_dataset.valid_indices)}
-        window_local_indices = [local_index_map[g] for g in window_global_indices if g in local_index_map]
-        if not window_local_indices:
-            raise ValueError("No valid local indices found for selected episode.")
-
-        task_desc = load_task_descriptions(data_config.precomputed_dir)
         task_name = task_desc.get(args.task_id, f"task_{args.task_id}")
         print(
             f"Running full episode | task_id={args.task_id} ({task_name}) "
-            f"| episode_index={ep_idx} | windows={len(window_local_indices)}"
+            f"| episode_index={episode_meta['episode_index']}"
         )
-
-        compare_frames = []
-        mse_list = []
-        frame_idx = num_cond_latent_frames + args.pred_frame_offset
-        for step_i, sample_idx in enumerate(window_local_indices):
-            batch = test_dataset[sample_idx]
-            gt_full, pred_full, future_mse = predict_one_sample(
-                backbone, fm, batch, num_cond_latent_frames, compute_dtype, device, args.ode_steps
-            )
-            mse_list.append(future_mse)
-
-            gt_np = to_video_np(gt_full)
-            pred_np = to_video_np(pred_full)
-            gt_f = gt_np[frame_idx]
-            pred_f = pred_np[frame_idx]
-            compare_frames.append(np.concatenate([gt_f, pred_f], axis=1))
-
-            if (step_i + 1) % 50 == 0 or step_i == 0 or (step_i + 1) == len(window_local_indices):
-                print(f"  progress: {step_i + 1}/{len(window_local_indices)} windows")
-
         out_path = args.output_path
         root, ext = os.path.splitext(out_path)
         if ext.lower() not in [".mp4", ".gif"]:
             out_path = f"{root}.{args.save_format}"
-        save_frame_sequence(compare_frames, out_path)
+        mse_mean, mse_std, _ = run_one_full_episode(args.task_id, episode_meta, out_path)
         backbone.offload_vae_and_text_encoder("cpu")
         print(f"Saved full-episode comparison to: {out_path}")
-        print(f"Full-episode window MSE mean: {float(np.mean(mse_list)):.6f}")
-        print(f"Full-episode window MSE std : {float(np.std(mse_list)):.6f}")
+        print(f"Full-episode window MSE mean: {mse_mean:.6f}")
+        print(f"Full-episode window MSE std : {mse_std:.6f}")
         return
 
     if not args.all_tasks:
